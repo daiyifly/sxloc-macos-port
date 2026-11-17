@@ -22,7 +22,7 @@ class Workspace extends StatefulWidget {
 }
 
 class _WorkspaceState extends State<Workspace> with WindowListener {
-  static const isMacOS = Platform.isMacOS;
+  static final isMacOS = Platform.isMacOS;
   final core = CoreClient();
   final mapController = MapController();
   final search = TextEditingController();
