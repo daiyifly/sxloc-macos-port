@@ -9,7 +9,7 @@
     <RootNamespace>Iap2Loc</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Desktop/**;Tests/**;Bridge/**;FlutterApp/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Desktop/**;Tests/**;Bridge/**;BridgeMac/**;FlutterApp/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
