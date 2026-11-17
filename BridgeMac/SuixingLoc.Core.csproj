@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    macOS build of the JSON-RPC core process consumed by the Flutter desktop UI.
+    Shares the cross-platform engine (Engine/Protocol/Transport) from Iap2Loc.csproj.
+    AssemblyName must stay "SuixingLoc.Core": Iap2Loc.csproj grants InternalsVisibleTo
+    to that exact name.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SuixingLoc.Core</AssemblyName>
+    <RootNamespace>SuixingLoc.Core</RootNamespace>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="DesktopSettings.cs" />
+    <Compile Include="DesktopIdentityProvider.cs" />
+    <Compile Include="../Desktop/ChineseText.cs" Link="Shared/ChineseText.cs" />
+    <Compile Include="../Desktop/CoordinateConverter.cs" Link="Shared/CoordinateConverter.cs" />
+    <Compile Include="../Desktop/PlaceSearchService.cs" Link="Shared/PlaceSearchService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Built-in experimental identity, produced by scripts/import-desktop-identity.sh -->
+    <EmbeddedResource Include="../Desktop/Private/identity.pk8"
+                      LogicalName="Iap2Loc.Desktop.Private.identity.pk8"
+                      Condition="Exists('../Desktop/Private/identity.pk8')" />
+    <EmbeddedResource Include="../Desktop/Private/certificate.p7b"
+                      LogicalName="Iap2Loc.Desktop.Private.certificate.p7b"
+                      Condition="Exists('../Desktop/Private/certificate.p7b')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Iap2Loc.csproj" />
+  </ItemGroup>
+</Project>

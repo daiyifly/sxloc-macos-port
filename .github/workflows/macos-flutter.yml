@@ -1,0 +1,90 @@
+name: Build macOS Flutter app (sxloc port)
+
+# Manual dispatch so the port can be built from any fork without touching the
+# upstream Windows/Android release workflows. Produces unsigned (ad-hoc) DMGs
+# for Apple Silicon and Intel in the Actions artifacts.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'App version, e.g. 1.2.0'
+        required: false
+        default: '1.2.0'
+      build:
+        description: 'Build number'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sxloc-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} DMG
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+      APP_VERSION: ${{ inputs.version }}
+      APP_BUILD: ${{ inputs.build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify build host
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -m
+          xcrun --find clang
+          xcodebuild -version
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Flutter 3.50
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.50.0'
+          cache: true
+
+      - name: Restore build identity from official DiPlay APK
+        shell: bash
+        run: bash scripts/import-desktop-identity.sh
+
+      - name: Build DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-macos.sh "${{ matrix.arch }}" \
+            "dist/suixing-macos-${{ matrix.arch }}.dmg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: suixing-macos-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
