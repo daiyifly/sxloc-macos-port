@@ -93,11 +93,17 @@ echo "[3/5] 生成 runner 并构建 Flutter macOS 应用…"
     --dart-define=APP_BUILD="${APP_BUILD:-1}" \
     --dart-define=PROJECT_GITHUB_URL="${PROJECT_GITHUB_URL:-https://github.com/yfl520/sxloc}"
 )
-FLUTTER_APP="$ROOT/FlutterApp/build/macos/Build/Products/Release/随行定位.app"
-if [[ ! -d "$FLUTTER_APP" ]]; then
-  echo "错误：Flutter 构建未产出 $FLUTTER_APP" >&2
+# The macOS runner is generated with --project-name suixing_loc, so the built
+# bundle is named suixing_loc.app (not the Chinese display name). Detect the
+# actual product instead of hard-coding a name: product names vary with the
+# project name / Info.plist CFBundleName across Flutter versions.
+FLUTTER_PRODUCTS="$ROOT/FlutterApp/build/macos/Build/Products/Release"
+FLUTTER_APP="$(find "$FLUTTER_PRODUCTS" -maxdepth 1 -type d -name '*.app' -print -quit 2>/dev/null)"
+if [[ -z "$FLUTTER_APP" || ! -d "$FLUTTER_APP" ]]; then
+  echo "错误：Flutter 构建未在 $FLUTTER_PRODUCTS 产出 .app" >&2
   exit 1
 fi
+echo "  检测到 Flutter 产物：$(basename "$FLUTTER_APP")"
 cp -R "$FLUTTER_APP/." "$APP/"
 
 # ---------------------------------------------------------------------------
