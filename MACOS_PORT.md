@@ -1,4 +1,36 @@
-# 随行定位 · macOS 移植版（蓝牙通道）
+# 随行定位 · macOS 移植版（蓝牙 + USB 双通道）
+
+## 版本历史
+
+| 版本 | 说明 |
+| --- | --- |
+| **v1.3.0**（2026-11-18） | 新增 **USB 开发者定位**通道，内置自包含 Python 3.14 + pymobiledevice3 11.55.0，支持 iOS 26 / iPhone 16 Pro。通过 GitHub Release 直接下载。 |
+| v1.2.0 | 初版，仅蓝牙 iAP2 通道。 |
+
+## USB 开发者定位（v1.3.0 新增）
+
+iPhone 连不上 Mac 蓝牙时，可改用 USB 数据线定位——该通道走 `UserspaceRsdTunnel + DVT`，**不依赖蓝牙、不需要同一局域网、不需要 root**。内置实验身份与蓝牙通道共用。
+
+**使用前置条件（iPhone 16 Pro / iOS 26）：**
+1. 用**可传输数据的 USB 线**连接 Mac（非仅充电线）。
+2. iPhone 解锁，弹窗点「信任此电脑」并输入锁屏密码。
+3. 开启开发者模式：设置 → 隐私与安全性 → 开发者模式 → 开启 → 按提示重启 → 解锁后再确认启用。
+   - 找不到入口时，可在 App 的 USB 设备页点「显示开发者模式入口」，手机会弹出入口。
+4. 在 App「我的设备 → USB 开发者」点刷新选设备，选点地图并「应用定位」，用「停止模拟」结束。
+
+> iOS 17.4 及以后（含 iOS 26）走 USB 隧道，无需手机与电脑同一局域网；iOS 17.0–17.3 才需要同局域网。
+
+## 已编译产物
+
+通过 GitHub Actions 真实编译。arm64 产物位于 `../releases/`，v1.3.0 发布在仓库 **Releases** 页（`macos-v1.3.0+1`）。
+
+| 文件 | 架构 | 适用设备 |
+| --- | --- | --- |
+| `suixing-macos-arm64.dmg` | arm64 | Apple Silicon（M1/M2/M3/M4，含 MacBook Neo） |
+
+编译链路全部验证通过：C# 核心本地 `dotnet build` 0 错误；云端 Flutter 3.50 + .NET 10 成功构建。DMG 含蓝牙 dylib + 自包含 Python USB 运行时，ad-hoc 签名完成。
+Intel（x64）版本因免费账户下 `macos-15-intel` runner 排队超时未产出；如需 Intel 版，把仓库改为 public 后重跑 workflow。
+校验：`sha256sum -c suixing-macos-arm64.dmg.sha256`。
 
 本目录在 `yfl520/sxloc` 原项目基础上增加了 macOS 桌面版支持。原仓库当前只发布 Windows 与 Android 版，但其**核心引擎（协议 / 定位会话 / 蓝牙传输）本就是跨平台的 .NET 10 代码**，本次移植复用这套引擎，只替换 Windows 专属的 Bridge 层，并用 Flutter 的 macOS runner 承载原有界面。
 
@@ -7,9 +39,10 @@
 | 层 | 处理 |
 | --- | --- |
 | iAP2 协议 / 定位会话 / 蓝牙 RFCOMM（`Protocol/`、`Engine/`、`Transport/`） | 原生已支持 macOS（`MacBtRfcommTransport.cs` + `Native/MacBluetoothBridge.m`），直接复用 |
-| JSON-RPC 核心进程 | 新增 `BridgeMac/`：去掉 USB 开发者通道、Windows 自更新器、DPAPI，改用本机 AES 加密；协议与 Windows 版完全一致 |
-| Flutter 界面 | 复用原界面，修正核心可执行文件路径、同意记录存储路径、关于页更新入口、USB 标签隐藏、平台文案 |
-| 打包 | 新增 `scripts/build-macos.sh`（编译 Obj-C 桥 → dotnet 发布核心 → flutter 构建 → 组装 .app → 签名 → DMG） |
+| JSON-RPC 核心进程 | 新增 `BridgeMac/`：去掉 Windows 自更新器、DPAPI（改本机 AES 加密）；USB 开发者通道移植为跨平台进程管理（去掉 Windows Job Object）；协议与 Windows 版完全一致 |
+| USB 定位运行时 | `BridgeMac/UsbWorker/`（跨平台 worker.py）+ `scripts/prepare-usb-runtime-macos.sh`：下载自包含 Python 3.14.10（校验 SHA256）并安装 pymobiledevice3 11.55.0；app bundle 内 `core/usb/` 随附 |
+| Flutter 界面 | 复用原界面，修正核心可执行文件路径、同意记录存储路径、关于页更新入口、平台文案；USB 标签页保留并补充 iOS 26 提示 |
+| 打包 | `scripts/build-macos.sh`：编译 Obj-C 桥 → dotnet 发布核心 → 准备 USB 运行时 → flutter 构建 → 组装 .app（含 USB 运行时，逐个签名 native .so）→ 签名 → DMG |
 | 身份材料 | 新增 `scripts/import-desktop-identity.sh`（校验官方 DiPlay APK 的 SHA-256 后提取身份） |
 | 云端编译 | 新增 `.github/workflows/macos-flutter.yml`，支持在 fork 仓库手动触发，产出 arm64 / x64 两个 DMG |
 

@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build-and-release:
     name: Build arm64 DMG and publish Release
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     env:
       DOTNET_NOLOGO: "true"

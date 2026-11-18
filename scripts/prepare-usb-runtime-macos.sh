@@ -68,6 +68,10 @@ fi
 mkdir -p "$DERIVED"
 cp -R "$PYROOT/bin" "$PYROOT/lib" "$PYROOT/include" "$DERIVED/" 2>/dev/null || cp -R "$PYROOT/." "$DERIVED/"
 PY="$DERIVED/bin/python3"
+# Ensure a stable `python3` entry point exists (C# launches bin/python3).
+if [[ ! -x "$PY" ]]; then
+  ln -sf python3.14 "$PY"
+fi
 
 echo "[usb-runtime] 安装 pymobiledevice3==$PMD3_VERSION 及依赖…" >&2
 "$PY" -m ensurepip --upgrade >/dev/null 2>&1 || true
