@@ -49,7 +49,7 @@ mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$STAGE/Applications"
 # 1. Compile the universal IOBluetooth bridge (Objective-C -> dylib).
 #    MacBtRfcommTransport.cs P/Invokes "iap2macbt" -> libiap2macbt.dylib.
 # ---------------------------------------------------------------------------
-echo "[1/5] 编译 IOBluetooth 桥接库…"
+echo "[1/6] 编译 IOBluetooth 桥接库…"
 xcrun clang -fobjc-arc -fPIC -O2 -dynamiclib \
   -arch arm64 -arch x86_64 \
   -framework Foundation -framework IOBluetooth \
@@ -58,7 +58,7 @@ xcrun clang -fobjc-arc -fPIC -O2 -dynamiclib \
 # ---------------------------------------------------------------------------
 # 2. Publish the cross-platform JSON-RPC core for this architecture.
 # ---------------------------------------------------------------------------
-echo "[2/5] 发布定位核心 ($RID)…"
+echo "[2/6] 发布定位核心 ($RID)…"
 dotnet publish BridgeMac/SuixingLoc.Core.csproj -c Release -r "$RID" \
   --self-contained true \
   -p:PublishSingleFile=true \
@@ -68,9 +68,17 @@ dotnet publish BridgeMac/SuixingLoc.Core.csproj -c Release -r "$RID" \
   -o "$WORK/core-publish"
 
 # ---------------------------------------------------------------------------
+# 2b. Prepare the self-contained Python + pymobiledevice3 runtime for the USB
+#     developer channel (downloaded once and cached under build/usb).
+# ---------------------------------------------------------------------------
+echo "[3/6] 准备 USB 开发者运行时 (Python + pymobiledevice3)…"
+USB_RUNTIME="$(bash scripts/prepare-usb-runtime-macos.sh "$ARCH" "$ROOT/build/usb")"
+echo "  USB 运行时：$USB_RUNTIME"
+
+# ---------------------------------------------------------------------------
 # 3. Build the Flutter macOS desktop app.
 # ---------------------------------------------------------------------------
-echo "[3/5] 生成 runner 并构建 Flutter macOS 应用…"
+echo "[4/6] 生成 runner 并构建 Flutter macOS 应用…"
 (
   cd FlutterApp
   "$FLUTTER_BIN" config --enable-macos-desktop >/dev/null
@@ -110,11 +118,20 @@ cp -R "$FLUTTER_APP/." "$APP/"
 # 4. Lay out resources the core process needs next to the Flutter executable.
 #    core_client.dart resolves core/SuixingLoc.Core relative to the executable.
 # ---------------------------------------------------------------------------
-echo "[4/5] 组装应用包…"
+echo "[5/6] 组装应用包…"
 mkdir -p "$CONTENTS/MacOS/core"
 cp "$WORK/core-publish/SuixingLoc.Core" "$CONTENTS/MacOS/core/SuixingLoc.Core"
 cp "$WORK/libiap2macbt.dylib" "$CONTENTS/MacOS/core/libiap2macbt.dylib"
 chmod 755 "$CONTENTS/MacOS/core/SuixingLoc.Core"
+
+# Bundle the USB runtime next to the core: core/usb/{bin/python3,worker.py,lib/...}.
+# UsbDeveloperService.cs resolves it via AppContext.BaseDirectory/usb.
+USB_BUNDLE="$CONTENTS/MacOS/core/usb"
+mkdir -p "$USB_BUNDLE"
+cp -R "$USB_RUNTIME/bin" "$USB_RUNTIME/lib" "$USB_RUNTIME/include" "$USB_BUNDLE/" 2>/dev/null || true
+cp BridgeMac/UsbWorker/worker.py "$USB_BUNDLE/worker.py"
+cp BridgeMac/UsbWorker/prepare_image.py "$USB_BUNDLE/prepare_image.py"
+chmod 755 "$USB_BUNDLE/bin/python3" "$USB_BUNDLE/bin/python3.14" 2>/dev/null || true
 
 # Info.plist: add the Bluetooth usage description required by IOBluetooth.
 /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string 用于查找已配对的 iPhone，查询 iAP2 服务并建立蓝牙 RFCOMM 连接。" "$CONTENTS/Info.plist" 2>/dev/null || true
@@ -125,13 +142,24 @@ printf 'upstream=%s\narchitecture=%s\n' "$(git rev-parse HEAD)" "$ARCH" > "$STAG
 git archive --format=tar HEAD | gzip -9 > "$STAGE/source.tar.gz"
 
 # ---------------------------------------------------------------------------
-# 5. Ad-hoc codesign every Mach-O, then the bundle, then produce the DMG.
-#    For distribution outside the App Store, replace "-" with a Developer ID
-#    Application cert and add `xcrun notarytool submit` + `xcrun stapler staple`.
+# 6. Ad-hoc codesign every Mach-O, then the bundle, then produce the DMG.
+#    The bundled Python runtime ships native .so modules (cryptography, cffi,
+#    pillow, ...). On Apple Silicon every Mach-O must be signed, and codesign
+#    --deep does not reliably reach into site-packages, so sign those first.
+#    Hardened runtime is intentionally NOT enabled (no --options runtime), so
+#    library validation does not reject the ad-hoc signed third-party modules.
+#    For App Store distribution use a Developer ID cert + notarytool instead.
 # ---------------------------------------------------------------------------
-echo "[5/5] 签名并打包 DMG…"
+echo "[6/6] 签名并打包 DMG…"
 codesign --force --sign - "$CONTENTS/MacOS/core/libiap2macbt.dylib"
 codesign --force --sign - "$CONTENTS/MacOS/core/SuixingLoc.Core"
+# Sign every native module and executable inside the USB runtime (regular files
+# only, so symlinks such as python3 -> python3.14 are left intact).
+if [[ -d "$USB_BUNDLE" ]]; then
+  while IFS= read -r -d '' macho; do
+    codesign --force --sign - "$macho" 2>/dev/null || true
+  done < <(find "$USB_BUNDLE" -type f \( -name '*.so' -o -perm -u+x \) -print0)
+fi
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 

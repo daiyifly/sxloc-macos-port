@@ -1706,22 +1706,21 @@ class _WorkspaceState extends State<Workspace> with WindowListener {
       ),
       if (!devicesCollapsed) ...[
         const SizedBox(height: 8),
-        if (!isMacOS)
-          SizedBox(
-            width: double.infinity,
-            child: CupertinoSlidingSegmentedControl<int>(
-              groupValue: deviceMode,
-              children: {
-                0: Text('蓝牙', style: textStyle(11)),
-                1: Text('USB 开发者', style: textStyle(11)),
-              },
-              onValueChanged: (value) {
-                if (value != null) setState(() => deviceMode = value);
-              },
-            ),
+        SizedBox(
+          width: double.infinity,
+          child: CupertinoSlidingSegmentedControl<int>(
+            groupValue: deviceMode,
+            children: {
+              0: Text('蓝牙', style: textStyle(11)),
+              1: Text('USB 开发者', style: textStyle(11)),
+            },
+            onValueChanged: (value) {
+              if (value != null) setState(() => deviceMode = value);
+            },
           ),
+        ),
         const SizedBox(height: 12),
-        if (!isMacOS && deviceMode == 1)
+        if (deviceMode == 1)
           usbDevicesBody()
         else ...[
           Text(
@@ -1730,7 +1729,7 @@ class _WorkspaceState extends State<Workspace> with WindowListener {
                 : '先在 Windows 蓝牙设置中完成配对',
             style: textStyle(11, muted),
           ),
-          if (!isMacOS && usbActive)
+          if (usbActive)
             Text('连接蓝牙前会先停止 USB 模拟', style: textStyle(10, muted)),
           const SizedBox(height: 12),
           if (refreshing)
@@ -2516,11 +2515,12 @@ class _WorkspaceState extends State<Workspace> with WindowListener {
                 '03  连接与认证',
                 '连接后依次进行协议握手、配件识别和认证，设备订阅后开始发送。发送条数不代表 iOS 已采用该位置，请以手机地图为准。',
               ),
-              if (!isMacOS)
-                (
-                  'USB 开发者定位',
-                  '在“我的设备”切换 USB 开发者，插入数据线、解锁并信任此电脑后刷新。iOS 16 及以后需开发者模式；17.0–17.3 还需手机与电脑同一局域网。连接后改点并应用，使用“停止模拟”结束。各系统版本的实际效果待手机验证。',
-                ),
+              (
+                'USB 开发者定位',
+                isMacOS
+                    ? '在“我的设备”切换 USB 开发者，用数据线连接 iPhone、解锁并信任此电脑后刷新。iOS 16 及以后需开启「设置 → 隐私与安全性 → 开发者模式」；找不到入口可点“显示开发者模式入口”。iOS 17.4 及以后（含 iOS 26）走 USB 隧道、无需同一局域网。连接后改点并应用，使用“停止模拟”结束。',
+                    : '在“我的设备”切换 USB 开发者，插入数据线、解锁并信任此电脑后刷新。iOS 16 及以后需开发者模式；17.0–17.3 还需手机与电脑同一局域网。连接后改点并应用，使用“停止模拟”结束。各系统版本的实际效果待手机验证。',
+              ),
               (
                 '搜索与坐标',
                 '默认使用免 Key 的 Photon 搜索，覆盖随地区变化；国内地址可在设置中使用高德 Web 服务 Key。输入坐标默认“纬度,经度”，高德坐标可加 gcj: 前缀。',
@@ -2533,9 +2533,7 @@ class _WorkspaceState extends State<Workspace> with WindowListener {
               ),
               (
                 '快捷操作',
-                isMacOS
-                    ? 'Ctrl+F 搜索 · Ctrl+Enter 应用定位 · Ctrl+, 设置 · Ctrl+W 关闭。关闭应用会结束蓝牙会话。'
-                    : 'Ctrl+F 搜索 · Ctrl+Enter 应用定位 · Ctrl+, 设置 · Ctrl+W 关闭。关闭应用会结束蓝牙会话，并请求停止 USB 模拟。',
+                'Ctrl+F 搜索 · Ctrl+Enter 应用定位 · Ctrl+, 设置 · Ctrl+W 关闭。关闭应用会结束蓝牙会话，并请求停止 USB 模拟。',
               ),
               (
                 '网络与开源',

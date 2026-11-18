@@ -12,12 +12,13 @@ namespace SuixingLoc.Core;
 /// <summary>
 /// macOS JSON-RPC core process. Speaks the exact same line-delimited protocol as the
 /// Windows SuixingLoc.Core so the Flutter desktop UI needs no protocol changes.
-/// Differences from Windows: no USB developer channel, no in-app self-updater,
-/// Bluetooth settings deep link uses macOS System Settings.
+/// Differences from Windows: no in-app self-updater, Bluetooth settings deep link uses
+/// macOS System Settings. USB developer channel is supported via a bundled Python runtime.
 /// </summary>
 internal static class Program
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
+    private static readonly UsbDeveloperService Usb = new();
     private static readonly object OutputGate = new();
     private static readonly object SettingsGate = new();
     private static readonly object SearchGate = new();
@@ -52,6 +53,7 @@ internal static class Program
             config.PrepareForRun(BluetoothDevices.TryGetLocalAdapterAddress());
             Manager = new SessionManager(Settings.Latitude, Settings.Longitude, config);
             Manager.ApplyTarget(Settings.ToTargetUpdate(), Settings.Rate);
+            Usb.Remember(Manager.Target.Snapshot());
             Favorites = new FavoriteStore(config);
             string? line;
             var running = new List<Task>();
@@ -70,6 +72,7 @@ internal static class Program
         {
             ShuttingDown = true;
             CancelSearch();
+            await Usb.DisposeAsync();
             Manager?.Dispose();
             Search.Dispose();
         }
@@ -107,9 +110,12 @@ internal static class Program
                 "openData" => Open(DesktopSettings.DataDirectory),
                 "openGithub" => OpenGithub(Text(args, "url")),
                 "openBluetooth" => Open("x-apple.systempreferences:com.apple.BluetoothSettings"),
-                // USB developer channel and Windows self-updater are intentionally absent on macOS.
-                "usb.devices" or "usb.connect" or "usb.stop" or "usb.clearError" or "usb.revealDeveloperMode"
-                    => throw new InvalidOperationException("macOS 版本当前仅支持蓝牙通道，USB 开发者定位尚未移植。"),
+                "usb.devices" => await Usb.Devices(),
+                "usb.connect" => await Usb.Connect(Text(args, "udid")),
+                "usb.revealDeveloperMode" => await Usb.RevealDeveloperMode(Text(args, "udid")),
+                "usb.stop" => await Usb.Stop(),
+                "usb.clearError" => await Usb.ClearError(),
+                // Windows self-updater is intentionally absent on macOS.
                 "update.directory" or "update.install"
                     => throw new InvalidOperationException("macOS 版本请通过 GitHub Releases 手动更新。"),
                 "shutdown" => await Shutdown(),
@@ -133,7 +139,7 @@ internal static class Program
                 identity = new { Identity.Name, Identity.Detail, valid = Identity.Warning is null,
                     Manager.Profile.Serial, Manager.Profile.AdapterAddress },
                 favorites = Favorites.All,
-                usb = new { phase = "unavailable", status = "macOS 版暂不支持 USB 通道" },
+                usb = Usb.Snapshot(),
                 sessions = Manager.Sessions.Select(session => new
                 {
                     session.Id, session.Label, session.Request.Mac, session.Running, session.Starting,
@@ -227,8 +233,9 @@ internal static class Program
         return true;
     }
 
-    private static Task<object> Apply(JsonElement args)
+    private static async Task<object> Apply(JsonElement args)
     {
+        TargetState target;
         lock (SettingsGate)
         {
             var old = Manager.Target.Snapshot();
@@ -244,7 +251,7 @@ internal static class Program
             };
             var rate = Integer(args, "rate", Settings.Rate, 10, 60000);
             Manager.ApplyTarget(update, rate);
-            var target = Manager.Target.Snapshot();
+            target = Manager.Target.Snapshot();
             Settings.Latitude = target.Latitude; Settings.Longitude = target.Longitude;
             Settings.Altitude = target.Altitude ?? 10; Settings.Accuracy = target.Accuracy ?? 5;
             Settings.Speed = target.Speed ?? 0; Settings.Bearing = target.Bearing ?? 0;
@@ -252,8 +259,9 @@ internal static class Program
             Settings.JitterPosition = target.JitterPosition; Settings.JitterAccuracy = target.JitterAccuracy;
             Settings.JitterMeters = target.JitterMeters; Settings.AccuracyMin = target.AccuracyMin; Settings.AccuracyMax = target.AccuracyMax;
             Settings.Save();
-            return Task.FromResult<object>(target);
         }
+        await Usb.UpdateTarget(target);
+        return target;
     }
 
     private static async Task<object> Connect(JsonElement args)
@@ -298,7 +306,7 @@ internal static class Program
     private static object ImportIdentity(string path) { lock (SettingsGate) { Identity.Import(path); return true; } }
     private static object UseBuiltIn() { lock (SettingsGate) { Identity.UseBuiltIn(); return true; } }
     private static object CheckIdentity() { Identity.Prime(); return true; }
-    private static async Task<object> StopAll() { Manager.StopAll(); return await Task.FromResult(true); }
+    private static async Task<object> StopAll() { Manager.StopAll(); await Usb.Stop(); return true; }
     private static async Task<object> Shutdown() { ShuttingDown = true; return await StopAll(); }
 
     private static object Open(string path)

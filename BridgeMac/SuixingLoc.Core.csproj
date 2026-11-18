@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="UsbDeveloperService.cs" />
     <Compile Include="DesktopSettings.cs" />
     <Compile Include="DesktopIdentityProvider.cs" />
     <Compile Include="../Desktop/ChineseText.cs" Link="Shared/ChineseText.cs" />
