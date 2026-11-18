@@ -1,0 +1,68 @@
+name: Build and release macOS DMG
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/macos-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sxloc-macos-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build arm64 DMG and publish Release
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+      APP_VERSION: "1.2.0"
+      APP_BUILD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install Flutter 3.50
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.0"
+          cache: true
+
+      - name: Restore build identity
+        shell: bash
+        run: bash scripts/import-desktop-identity.sh
+
+      - name: Build arm64 DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-macos.sh arm64 dist/suixing-macos-arm64.dmg
+
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "macos-v1.2.0+1" \
+            dist/suixing-macos-arm64.dmg \
+            dist/suixing-macos-arm64.dmg.sha256 \
+            --title "随行定位 macOS 1.2.0（1）" \
+            --notes "MacBook Neo / Apple Silicon (arm64) DMG. Ad-hoc signed; right-click Open on first launch." \
+            --latest
