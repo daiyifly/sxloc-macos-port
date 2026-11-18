@@ -1,0 +1,78 @@
+name: Build macOS DMG on self-hosted Mac
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sxloc-macos-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build arm64 DMG on self-hosted Mac and publish Release
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 90
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+      APP_VERSION: "1.3.0"
+      APP_BUILD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show runner environment
+        shell: bash
+        run: |
+          uname -a
+          sw_vers
+          xcodebuild -version 2>/dev/null || true
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install Flutter 3.50
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.0"
+          cache: true
+
+      - name: Restore build identity
+        shell: bash
+        run: bash scripts/import-desktop-identity.sh
+
+      - name: Build arm64 DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build-macos.sh arm64 dist/suixing-macos-arm64.dmg
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="macos-v1.3.0+1"
+          ASSETS=(
+            dist/suixing-macos-arm64.dmg
+            dist/suixing-macos-arm64.dmg.sha256
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --title "随行定位 macOS 1.3.0（USB 定位版）" \
+              --notes "Apple Silicon (arm64). 新增 USB 开发者定位（内置 Python + pymobiledevice3，支持 iOS 26 / iPhone 16 Pro）。首次打开请右键→打开。USB 定位需：数据线、解锁并信任此电脑、开启开发者模式（设置→隐私与安全性）。" \
+              --latest
+          fi
+          gh release view "$TAG" --json url,assets
