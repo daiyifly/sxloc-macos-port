@@ -97,7 +97,7 @@ echo "[4/6] 生成 runner 并构建 Flutter macOS 应用…"
   done
   "$FLUTTER_BIN" pub get
   "$FLUTTER_BIN" build macos --release \
-    --dart-define=APP_VERSION="${APP_VERSION:-1.2.0}" \
+    --dart-define=APP_VERSION="${APP_VERSION:-1.3.0}" \
     --dart-define=APP_BUILD="${APP_BUILD:-1}" \
     --dart-define=PROJECT_GITHUB_URL="${PROJECT_GITHUB_URL:-https://github.com/yfl520/sxloc}"
 )
